@@ -6,7 +6,7 @@ import imageio
 
 
 class DataForNeRF:
-    def __init__(self, root):
+    def __init__(self, root, half_res=True):
         self.root = root
         self.splits = ['train', 'val', 'test']
         self.metas = {}
@@ -22,9 +22,9 @@ class DataForNeRF:
         self.images = None
         self.i_split = None
 
-        self.load_all()
+        self.load_all(half_res)
 
-    def load_all(self):
+    def load_all(self, half_res):
         all_imgs = []
         all_poses = []
         counts = [0]
@@ -43,6 +43,16 @@ class DataForNeRF:
             all_poses.append(poses)
         self.i_split = [np.arange(counts[i], counts[i + 1]) for i in range(3)]
         images = np.concatenate(all_imgs, 0)
-        self.images = images[..., :3] * images[..., -1:] + (1. - images[..., -1:])
-        self.poses = np.concatenate(all_poses, 0)
 
+        self.poses = np.concatenate(all_poses, 0)
+        if half_res:
+            self.h = self.h // 2
+            self.w = self.w // 2
+            self.focal = self.focal / 2.
+
+            images_half_res = np.zeros((images.shape[0], self.h, self.w, 4))
+            for i, img in enumerate(images):
+                images_half_res[i] = cv2.resize(img, (self.w, self.h), interpolation=cv2.INTER_AREA)
+            images = images_half_res
+
+        self.images = images[..., :3] * images[..., -1:] + (1. - images[..., -1:])

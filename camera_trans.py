@@ -18,7 +18,7 @@ def pose_spherical_v2(theta, phi, r):
 
 
 class CamTrans:
-    def __init__(self, focal, h=800, w=800, device="cuda:2"):
+    def __init__(self, focal, h=400, w=400, device="cuda:2"):
         self.focal_x = focal
         self.focal_y = focal
         self.offset_x = w / 2
