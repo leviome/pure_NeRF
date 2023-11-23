@@ -54,12 +54,15 @@ def volume_rendering(raw, z_vals, rays_d):
     # weights = alpha * tf.math.cumprod(1.-alpha + 1e-10, -1, exclusive=True)
     weights = alpha * torch.cumprod(torch.cat([torch.ones((alpha.shape[0], 1)).to(alpha),
                                                1. - alpha + 1e-10], -1), -1)[:, :-1]
+
+    depth_map = torch.sum(weights * z_vals, -1) / torch.sum(weights, -1)
+    disp_map = 1. / torch.max(1e-10 * torch.ones_like(depth_map), depth_map)
     rgb_map = torch.sum(weights[..., None] * rgb, -2)  # [N_rays, 3]
 
-    acc_map = torch.sum(weights, -1)
+    acc_map = torch.sum(weights, -1)  # accumulative
     rgb_map = rgb_map + (1. - acc_map[..., None])
 
-    return rgb_map, weights
+    return rgb_map, weights, depth_map
 
 
 # Positional encoding (section 5.1)
@@ -101,7 +104,7 @@ class Embedder:
         self.out_dim = out_dim
 
     def embed(self, inputs):
-        return torch.cat([fn(inputs) for fn in self.embed_fns], -1), 0
+        return torch.cat([fn(inputs) for fn in self.embed_fns], -1), None
 
 
 class HashEmbedder(nn.Module):
@@ -231,7 +234,7 @@ class SHEncoder(nn.Module):
         return result
 
     def embed(self, x):
-        return self.forward(x)
+        return self.forward(x), None
 
 
 class NeRF(nn.Module):
@@ -395,6 +398,7 @@ class NeRFWrapper:
                             [4.0072, 4.0174, 3.3384]]
             bbox = torch.Tensor(bounding_box).to(device)
             self.embedder = HashEmbedder(bbox).to(device)
+            embedding_params = list(self.embedder.parameters())
             self.embedder_dir = SHEncoder().to(device)
             self.net = NeRFSmall(num_layers=2,
                                  hidden_dim=64,
@@ -403,12 +407,22 @@ class NeRFWrapper:
                                  hidden_dim_color=64,
                                  input_ch=self.embedder.out_dim,
                                  input_ch_views=self.embedder_dir.out_dim).to(device)
+
             grad_vars = list(self.net.parameters())
-            embedding_params = list(self.embedder.parameters())
+
+            self.net_fine = NeRFSmall(num_layers=2,
+                                      hidden_dim=64,
+                                      geo_feat_dim=15,
+                                      num_layers_color=3,
+                                      hidden_dim_color=64,
+                                      input_ch=self.embedder.out_dim,
+                                      input_ch_views=self.embedder_dir.out_dim).to(device)
+            grad_vars += list(self.net_fine.parameters())
+
             self.optimizer = RAdam([
                 {'params': grad_vars, 'weight_decay': 1e-6},
                 {'params': embedding_params, 'eps': 1e-15}
-            ], lr=initial_lr, betas=(0.9, 0.99))
+            ], lr=0.01, betas=(0.9, 0.99))
 
         self.start = 0
 
@@ -444,6 +458,8 @@ class NeRFWrapper:
             [_net(
                 embedded[i:i + self.net_chunk]) for i in range(0,
                                                                embedded.shape[0], self.net_chunk)], 0)
+        if keep_mask is not None:
+            outputs_flat[~keep_mask, -1] = 0
         outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
         return outputs
 
@@ -464,7 +480,7 @@ class NeRFWrapper:
         pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[..., :, None]  # [N_rays, N_samples, 3]
 
         raw_outputs = self.func(pts, view_directions)
-        rgb, weights = volume_rendering(raw_outputs, z_vals, rays_d)
+        rgb, weights, _ = volume_rendering(raw_outputs, z_vals, rays_d)
 
         z_vals_mid = .5 * (z_vals[..., 1:] + z_vals[..., :-1])
         z_samples = sample_pdf(z_vals_mid, weights[..., 1:-1], self.N_importance)
@@ -475,8 +491,8 @@ class NeRFWrapper:
         # [N_rays, N_samples + N_importance, 3]
 
         raw_outputs_fine = self.func(pts, view_directions, use_fine=True)
-        rgb_fine, _ = volume_rendering(raw_outputs_fine, z_vals, rays_d)
-        return rgb, rgb_fine
+        rgb_fine, _, depth = volume_rendering(raw_outputs_fine, z_vals, rays_d)
+        return rgb, rgb_fine, depth
 
     def render_a_view(self, cam_trans, pose, h=400, w=400, save_name="demo.png", save=True):
         rays_o, rays_d = cam_trans.get_rays(pose)
@@ -493,7 +509,7 @@ class NeRFWrapper:
         rgb = []
         for i in range(0, rays.shape[0], self.net_chunk):
             with torch.no_grad():
-                _, rgb_mini_batch = self.render_rays(rays[i:i + self.net_chunk])
+                _, rgb_mini_batch, depth = self.render_rays(rays[i:i + self.net_chunk])
             rgb.append(rgb_mini_batch)
         rgb_flat = torch.concat(rgb)
         recon_img = torch.reshape(rgb_flat, (h, w, rgb_flat.shape[-1]))
