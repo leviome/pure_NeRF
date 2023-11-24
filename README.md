@@ -12,3 +12,9 @@ python main.py
 ```sh
 python main.py --hash
 ```
+
+### Hash mode training for 10 minutes
+<p float="center">
+  <img src="assets/hash_epoch4k_10min.png" width="78%" />
+</p>
+
