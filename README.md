@@ -4,7 +4,7 @@ minimal implementation of NeRF
 ## train a base NeRF
 
 ```sh
-python main.py
+python main.py --lrate 5e-4 --lrate_decay 500
 ```
 
 ## train a NeRF with multi-resolution hash encoding
@@ -13,8 +13,13 @@ python main.py
 python main.py --hash
 ```
 
-### Hash mode training for 10 minutes
+training hash mode for 10 minutes:
 <p float="center">
-  <img src="assets/hash_epoch4k_10min.png" width="78%" />
+  <img src="assets/hash_epoch4k_10min.png" width="30%" />
+</p>
+
+training vanilla nerf for 10 minutes:
+<p float="center">
+  <img src="assets/vanilla_epoch8k_10minutes.png" width="30%" />
 </p>
 

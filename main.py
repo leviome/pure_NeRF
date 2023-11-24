@@ -26,9 +26,12 @@ def get_args():
     parser.add_argument('--hash', action="store_true")
     parser.add_argument('--render_only', action="store_true")
     parser.add_argument('--render_a_view', action="store_true")
+    parser.add_argument('--load_ckpt', action="store_true")
     parser.add_argument('--lrate', default=0.01, type=float)
     parser.add_argument('--lrate_decay', default=10, type=float)
     parser.add_argument('--tv_loss_weight', default=1e-6, type=float)
+
+    parser.add_argument('--device', default="0", type=str)
 
     return parser.parse_args()
 
@@ -61,7 +64,7 @@ def _main():
     if not osp.exists(save_path):
         os.makedirs(save_path)
 
-    device = "cuda:0"
+    device = "cuda:" + args.device
 
     model = NeRFWrapper(device, use_hash=args.hash, initial_lr=args.lrate,
                         near=args.near, far=args.far)
@@ -75,7 +78,8 @@ def _main():
 
     i_train, i_val, i_test = dataset.i_split
 
-    # model.load_checkpoint("./checkpoints/005000.tar")
+    if args.load_ckpt:
+        model.load_checkpoint(osp.join(save_path, "008000.tar"))
     global_step = model.start
 
     if args.render_only:
@@ -157,7 +161,7 @@ def _main():
             log_writer.add_scalar('PSNR_time/train', float(psnr.item()), time_consumption // 60)
 
         if i % 1000 == 0 and i > 0:
-            path = os.path.join("checkpoints", '{:06d}.tar'.format(i))
+            path = osp.join(save_path, '{:06d}.tar'.format(i))
             if args.hash:
                 torch.save({
                     'global_step': global_step,
