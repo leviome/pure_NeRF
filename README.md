@@ -23,3 +23,13 @@ training vanilla nerf for 10 minutes:
   <img src="assets/vanilla_epoch8k_10minutes.png" width="30%" />
 </p>
 
+converging speed:
+Hash
+<p float="center">
+  <img src="assets/hash_converging.png" width="30%" />
+</p>
+
+vanilla
+<p float="center">
+  <img src="assets/vanilla_converging1.png" width="30%" />
+</p>
