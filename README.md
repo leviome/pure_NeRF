@@ -24,12 +24,13 @@ training vanilla nerf for 10 minutes:
 </p>
 
 converging speed:
+
 Hash
 <p float="center">
-  <img src="assets/hash_converging.png" width="30%" />
+  <img src="assets/hash_converging.gif" width="30%" />
 </p>
 
 vanilla
 <p float="center">
-  <img src="assets/vanilla_converging1.png" width="30%" />
+  <img src="assets/vanilla_converging1.gif" width="30%" />
 </p>
